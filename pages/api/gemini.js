@@ -1,10 +1,11 @@
 // File: pages/api/gemini.js (for Next.js) or similar for your framework
-import { GoogleGenerativeAI } from "@google/generative-ai";
-//import { GoogleAIFileManager } from "@google/generative-ai/server";
-import * as fs from 'fs/promises';  // Import fs.promises for async file operations
-import * as path from 'path';      // Import the path module
-import { parse } from 'csv-parse/sync'; // Use synchronous parsing for simplicity within the async function
 
+//import { GoogleGenerativeAI } from "@google/generative-ai"; // No longer needed
+//import { GoogleAIFileManager } from "@google/generative-ai/server";
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { parse } from 'csv-parse/sync';
+import fetch from 'node-fetch'; // Import node-fetch
 
 // Load API key from environment variable
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -12,8 +13,10 @@ if (!apiKey) {
   throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
-//const fileManager = new GoogleAIFileManager(apiKey); // Not directly used for local files, but keeping for potential future use.
+// Construct the API URL.  This is the MOST IMPORTANT PART for using the REST API.
+const MODEL_NAME = "gemini-2.0-flash-exp"; // Use the correct model name
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
 
 // System instruction for the AI
 const SYSTEM_INSTRUCTION = `
@@ -56,10 +59,10 @@ Tone and Style:
 `;
 
 
-// Function to read and parse CSV data
+// Function to read and parse CSV data (remains the same)
 async function readAndParseCSV(filePath) {
   try {
-    const absolutePath = path.resolve(filePath); // Get absolute path
+    const absolutePath = path.resolve(filePath);
     const fileContent = await fs.readFile(absolutePath, 'utf-8');
     const records = parse(fileContent, {
       columns: true,
@@ -68,14 +71,13 @@ async function readAndParseCSV(filePath) {
     return records;
   } catch (error) {
     console.error(`Error reading or parsing CSV file ${filePath}:`, error);
-    throw new Error(`Failed to read or parse CSV file: ${filePath}`); // Re-throw for better error handling up the chain
+    throw new Error(`Failed to read or parse CSV file: ${filePath}`);
   }
 }
 
 
-// Initialize chat history with file loading
+// Initialize chat history with file loading (remains largely the same, but prepares for API format)
 const getInitialHistory = async () => {
-    // Define relative paths to your CSV files
     const csvFilePaths = [
         './data/cge_hh_h12025.csv',
         './data/cge_hh_h22024.csv',
@@ -86,40 +88,29 @@ const getInitialHistory = async () => {
 
     for (const filePath of csvFilePaths) {
         try {
-            const csvData = await readAndParseCSV(filePath);
-
-            // Instead of summarizing here, we'll prepare the data for the model.
-            // We create a string representation of the CSV data.  This is *much* better
-            // than trying to JSON.stringify the entire parsed CSV, which would be enormous.
-            // The model is much better at handling raw CSV text than a huge JSON object.
-            const fileContent = await fs.readFile(path.resolve(filePath), 'utf-8'); // Read raw content again
+            const fileContent = await fs.readFile(path.resolve(filePath), 'utf-8');
             initialUserParts.push({ text: `Here is the content of ${path.basename(filePath)}:\n\n${fileContent}` });
-
-
-            // Create a very concise summary, focusing on file's purpose, not the data details.
             modelSummaryParts.push({
                 text: `* File: ${path.basename(filePath)} - Contains raw data related to VMAXX responses and backend data for ${filePath.includes('H1_2025') ? 'H1 2025' : 'H2 2024'}.`,
             });
-
         } catch (error) {
-          //  Handle the error, but don't completely derail the process
-          console.error(`Error loading data from ${filePath}:`, error);
-          modelSummaryParts.push({ text: `* Failed to load data from ${path.basename(filePath)}.`});
+            console.error(`Error loading data from ${filePath}:`, error);
+            modelSummaryParts.push({ text: `* Failed to load data from ${path.basename(filePath)}.` });
         }
     }
 
-  return [
-    {
-      role: "user",
-      parts: [
-        ...initialUserParts,
-        { text: "summarize the data" }, // Now using the prepped text parts
-      ]
-    },
-    {
-        role: "model",
-        parts: [
-            {
+    return [
+        {
+            role: "user",
+            parts: [
+                ...initialUserParts,
+                { text: "summarize the data" },
+            ]
+        },
+        {
+            role: "model",
+            parts: [
+                 {
                 text: "Okay, here's a summary of the data you provided, focusing on key aspects relevant to the CG&E DM&A Ops Pillar and the VMAXX strategy:\n\n**Overall Context:**",
             },
             ...modelSummaryParts, // Add the concise file summaries
@@ -149,76 +140,85 @@ const getInitialHistory = async () => {
              "5.  **Benchmarking:**  Establish benchmarks for different maturity levels. This will allow you to quickly assess a client's current state and identify areas for improvement.\n\n" +
              "6.  **Actionable Insights and Recommendations:** Based on the analysis, develop data-driven recommendations for CG&E teams to help their clients improve their VMAXX scores and achieve better business outcomes."
            },
-        ],
-    },
-    {
-      role: "user",
-      parts: [{ text: "who is the analytical lead for hellofresh?" }],
-    },
-    {
-      role: "model",
-      parts: [
-        {
-          text: "Based on the provided data, the analytical lead for HelloFresh Group is Max Levitin."
+            ],
         },
-      ],
-    }
-  ];
+        {
+            role: "user",
+            parts: [{ text: "who is the analytical lead for hellofresh?" }],
+        },
+        {
+            role: "model",
+            parts: [
+                {
+                    text: "Based on the provided data, the analytical lead for HelloFresh Group is Max Levitin."
+                },
+            ],
+        }
+    ];
 };
 
 
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
 
-  try {
-    const { prompt } = req.body;
+    try {
+        const { prompt } = req.body;
 
-    // Create a new chat session for each request
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",  // Or your preferred model
-      systemInstruction: SYSTEM_INSTRUCTION,
-    });
+        const initialHistory = await getInitialHistory();
 
-    const generationConfig = {
-      temperature: 0.9,  // Adjust as needed
-      topP: 1,
-      topK: 1,
-      maxOutputTokens: 8192,
-      // responseMimeType: "text/plain",  // No need to specify, default is fine
-    };
+        // Combine initial history and current prompt into a single request payload
+        const requestData = {
+            contents: [
+                ...initialHistory,
+                {
+                    role: "user",
+                    parts: [{ text: prompt }],
+                },
+            ],
+            generationConfig: {
+              temperature: 0.9,
+              topP: 1,
+              topK: 1,
+              maxOutputTokens: 8192,
+            },
+            safetySettings: [  // Example safety settings, adjust as needed
+                {
+                    category: "HARM_CATEGORY_HARASSMENT",
+                    threshold: "BLOCK_MEDIUM_AND_ABOVE",
+                },
+                {
+                    category: "HARM_CATEGORY_HATE_SPEECH",
+                    threshold: "BLOCK_MEDIUM_AND_ABOVE",
+                },
+            ],
+        };
 
-    // Get the initial history with file data
-    const initialHistory = await getInitialHistory();
 
-    // Add the current prompt to the history.  VERY IMPORTANT: include the prompt *again*
-    // in the sendMessage call.  The history is the *past* conversation, the
-    // prompt is the *current* message.
-    const history = [
-      ...initialHistory,
-      {
-        role: "user",
-        parts: [{ text: prompt }],
-      }
-    ];
+        // Make the API request using node-fetch
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData),
+        });
 
-    // Start a chat session with the history
-    const chatSession = model.startChat({
-      generationConfig,
-      history: history
-    });
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Error from Gemini API:", errorData);  // Log full error
+            throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        }
 
-    // Get the response.  Pass the prompt here, too!
-    const result = await chatSession.sendMessage(prompt);
-    const responseText = result.response.text();
+        const data = await response.json();
+        // Extract the response text.  The response structure is different from the SDK.
+        const responseText = data.candidates[0].content.parts[0].text;
+        return res.status(200).json({ response: responseText });
 
-    // Return the response
-    return res.status(200).json({ response: responseText });
-
-  } catch (error) {
-    console.error('Error processing request:', error);
-    return res.status(500).json({ error: 'Failed to process request', details: error.message });
-  }
+    } catch (error) {
+        console.error('Error processing request:', error);
+        return res.status(500).json({ error: 'Failed to process request', details: error.message });
+    }
 }
