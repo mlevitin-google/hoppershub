@@ -1,7 +1,9 @@
-import type { NextConfig } from "next";
+// File: next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  // If you're deploying to Vercel, you might not need additional configuration
+  // For other platforms, you might need to add environment variables or build settings
+}
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
-
-export default nextConfig;
+module.exports = nextConfig
