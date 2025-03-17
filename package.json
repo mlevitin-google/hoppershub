@@ -10,13 +10,27 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "@google/generative-ai": "^0.17.0",
+    "@google/generative-ai/server": "^0.17.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "react-app-rewired": "^2.2.1",
+    "customize-cra": "^1.0.0",
+    "papaparse": "^5.4.1",
+    "@mui/material": "^5.15.14",
+    "@mui/icons-material": "^5.15.6",
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start:frontend": "react-app-rewired start",
+    "start:backend": "node backend/server.js",
+    "build": "react-app-rewired build"
   },
   "eslintConfig": {
     "extends": [
